@@ -47,12 +47,82 @@ class Forward:
             self.__log.logMsg('Forward produced error: ' + str(e))
             return False
 
+class Total:
+    def __init__(self, l=None, config = None):
+        if l == None:
+            self.__log = slog('Total class')
+        else:
+            self.__log = l
+        self.__calculate = False
+
+        if not config:
+            return
+        if not config['enverproxy'].get('total_calculate', False):
+            return
+
+        self.__calculate = True
+        self.forward_TTL = int(config['enverproxy'].get('forward_TTL', 300))
+        self.forward_phase_map = config['enverproxy'].get('forward_phase_map', {})
+
+        self.devices = {}
+
+    def data(wrdata):
+        if not self.__calculate:
+            return None
+
+        for wrdict in wrdata:
+            id = wrdict['wrid']
+            d = devices.get(id, {})
+            entry = {
+                'power': wrdict['power'],
+                'ttl': int(time.time()) + self.forward_TTL
+            }
+
+            if self.forward_phase_map:
+                if d:
+                    entry['phase'] = d['phase']
+                else:
+                    if (id in self.forward_phase_map.get('L1', [])):
+                        entry['phase'] = 'L1'
+                    elif (id in self.forward_phase_map.get('L2', [])):
+                        entry['phase'] = 'L2'
+                    elif (id in self.forward_phase_map.get('L3', [])):
+                        entry['phase'] = 'L3'
+                    else:
+                        entry['phase'] = None
+
+            devices[id] = entry
+
+        power = 0.0
+        count = 0
+        now = int(time.time())
+
+        phases = {'L1': {'power': 0.0,}, 'L2': {'power': 0.0,}, 'L3': {'power': 0.0,}} if self.forward_phase_map else None
+
+        for key, value in devices.items():
+            if value['ttl'] < now:
+                count += 1
+                power += value['power']
+                if phases:
+                    phase = value.get('phase', None)
+                    if phase:
+                        phases[phase]['power'] += value['power']
+                    else:
+                        self.__log.logMsg('Microconverter with ID ' + str(key) + ' was not found in forward_phase_map', 2)
+
+        self.__log.logMsg('Total active converters: ' + str(count) + ' power: ' + str(power), 3)
+
+        msg = {'count': count, 'grid': {'power': power}}
+        if phases:
+            msg['grid'].update(phases)
+        return msg
+
 
 class TheServer:
     input_list = []
     channel = {}
 
-    def __init__(self, host, port, forward_to, delay = 0.0001, buffer_size = 4096, log = None):
+    def __init__(self, host, port, forward_to, delay = 0.0001, buffer_size = 4096, log = None, config = None):
         if log == None:
             self.__log = slog('TheServer class')
         else:
@@ -66,6 +136,7 @@ class TheServer:
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind((host, port))
         self.server.listen(200)
+        self.total = Total(log, config)
 
     def connect_mqtt(self, host, user, password, port):
         self.mqtt = mqtt.Client('enverproxy')
@@ -200,6 +271,11 @@ class TheServer:
     def submit_data(self, wrdata):
         # Can be https as well. Also: if you use another port then 80 or 443 do not forget to add the port number.
         # user and password.
+
+        total = self.total.data(wrdata)
+        if total:
+            self.mqtt.publish('enverbridge/total', json.dumps(total))
+
         for wrdict in wrdata:
             id = wrdict.pop('wrid')
             wrdict.pop('remaining', None)
@@ -310,7 +386,7 @@ if __name__ == '__main__':
     delay       = float(config['enverproxy']['delay'])
     buffer_size = int(config['enverproxy']['buffer_size'])
     port        = int(config['enverproxy']['listen_port'])
-    server      = TheServer(host = '', port = port, forward_to = forward_to, delay = delay, buffer_size = buffer_size, log = log)
+    server      = TheServer(host = '', port = port, forward_to = forward_to, delay = delay, buffer_size = buffer_size, log = log, config = config)
     server.connect_mqtt(config['enverproxy']['mqtthost'], config['enverproxy']['mqttuser'], config['enverproxy']['mqttpassword'], int(config['enverproxy']['mqttport']))
     # Catch SIGTERM signals    
     signal.signal(signal.SIGTERM, Signal_handler(server, log).sigterm_handler)
