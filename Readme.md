@@ -2,7 +2,7 @@
 
 This is heavily based on the work of [@MEitelwein](https://github.com/MEitelwein) and forked from [Enverbridge-Proxy](https://gitlab.eitelwein.net/MEitelwein/Enverbridge-Proxy) (thanks for that).
 
-Using this python script, you can decode the traffic between your envertech EVB202 (and probably EVB300) and envertecportal.com. All data will be send to an MQTT broker.
+Using this python script, you can decode the traffic between your envertech EVB202 and EVB300 and envertecportal.com. All data will be send to an MQTT broker.
 
 ## How to use
 
@@ -14,6 +14,12 @@ Requires `paho-mqtt`. You can install it via `pip3 install paho-mqtt`
 ### EVB202
 
 Restart your EVB202 and immediately press `OK` to enter the boot menu. Under `Set DHCP` set `USE DHCP` to `NO`. Under `Set Client IP` set the IP of your EVB202 to a static IP in your subnet. Under `Set Server IP` configure the IP address of your linux machine running `enverproxy.py`. Under `Set Server Mode` select `Local` as Server - yes the manual say's it's not supported for EVB202, but it works.
+
+### EVB300
+
+Configure your EVB300 to use WiFi in STA mode or AP+STA mode under `WiFi Setting`. STA Mode WiFi needs to be able to connect your enverproxy host.
+Under `Trans Setting` select `SocketA Connect Setting` to `TCP-Client`. Enter your the host IP or DNS name of your host running enverproxy. Port needs to matcht with your enverprox settings - port 10013 is successfully tested.
+Do not connect an ethernet cable, that will stop the device from sending out data as configured in `Trans Settings`!
 
 ## Nasty details
 
