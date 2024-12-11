@@ -21,6 +21,13 @@ Configure your EVB300 to use WiFi in STA mode or AP+STA mode under `WiFi Setting
 Under `Trans Setting` select `SocketA Connect Setting` to `TCP-Client`. Enter the host IP or DNS name of your host running enverproxy. Port needs to match with your enverprox settings - port 10013 is successfully tested.
 Do not connect an ethernet cable, that will stop the device from sending out data as configured in `Trans Settings`!
 
+### Total power calculation
+
+If activated in the configuration, enverproxy can calculate the total power and the number of microinverters online.
+The format follows the format used in [https://github.com/mr-manuel/venus-os_dbus-mqtt-grid](venus-os_dbus-mqtt-grid), so you can use the data from enverproxy to emulate a power meter in your Venus OS device, e.g. Victron Cerbo GX.
+If you specify the `total_phase_map` in the configuration, the returned data will also contain the total power per phase for a 3-phase environment.
+The topic published for total power calculation is `enverbridge/total`.
+
 ## Nasty details
 
 The EVB202 will connect to the server every second - even if there is no data to transmit. This will blow up your log file if the log level is set to 3 or higher. Every 20 seconds there is a transmission of some unknown data. If the microinverters are online there will be data approximately once every minute.
