@@ -25,7 +25,7 @@ config = configparser.ConfigParser()
 config['internal']={}
 config['internal']['conf_file'] = args.config
 config['internal']['section']   = 'enverproxy'
-config['internal']['version']   = '1.3'
+config['internal']['version']   = '1.4'
 config['internal']['keys']      = "['buffer_size', 'delay', 'listen_port', 'verbosity', 'log_type', 'log_address', 'log_port', 'forward_IP', 'forward_port', 'mqttuser', 'mqttpassword', 'mqtthost', 'mqttport']"
 
 
@@ -57,50 +57,60 @@ class Total:
 
         if not config:
             return
-        if not config['enverproxy'].get('total_calculate', False):
+        if config['enverproxy'].get('total_calculate', 'False') != 'True':
             return
 
         self.__calculate = True
-        self.forward_TTL = int(config['enverproxy'].get('forward_TTL', 300))
-        self.forward_phase_map = config['enverproxy'].get('forward_phase_map', {})
+        self.total_TTL = int(config['enverproxy'].get('total_TTL', 300))
+
+        pm = config['enverproxy'].get('total_phase_map', None)
+        if pm:
+            try:
+                self.total_phase_map = json.loads(pm)
+            except Exception as e:
+                self.__log.logMsg("Failed to parse 'total_phase_map': " + str(e) + " continuing without phase map", 1)
+                self.total_phase_map = None
+        else:
+            self.total_phase_map = None
 
         self.devices = {}
 
-    def data(wrdata):
+    def data(self, wrdata):
         if not self.__calculate:
+            self.__log.logMsg('Total calc: disabled ', 3)
             return None
-
+        self.__log.logMsg('Total calc: enabled ', 3)
         for wrdict in wrdata:
-            id = wrdict['wrid']
-            d = devices.get(id, {})
+            id = int(wrdict['wrid'])
+            d = self.devices.get(id, {})
             entry = {
                 'power': wrdict['power'],
-                'ttl': int(time.time()) + self.forward_TTL
+                'ttl': int(time.time()) + self.total_TTL
             }
 
-            if self.forward_phase_map:
+            if self.total_phase_map:
                 if d:
                     entry['phase'] = d['phase']
                 else:
-                    if (id in self.forward_phase_map.get('L1', [])):
+                    if (id in self.total_phase_map.get('L1', [])):
                         entry['phase'] = 'L1'
-                    elif (id in self.forward_phase_map.get('L2', [])):
+                    elif (id in self.total_phase_map.get('L2', [])):
                         entry['phase'] = 'L2'
-                    elif (id in self.forward_phase_map.get('L3', [])):
+                    elif (id in self.total_phase_map.get('L3', [])):
                         entry['phase'] = 'L3'
                     else:
                         entry['phase'] = None
 
-            devices[id] = entry
+            self.devices[id] = entry
 
         power = 0.0
         count = 0
         now = int(time.time())
 
-        phases = {'L1': {'power': 0.0,}, 'L2': {'power': 0.0,}, 'L3': {'power': 0.0,}} if self.forward_phase_map else None
+        phases = {'L1': {'power': 0.0,}, 'L2': {'power': 0.0,}, 'L3': {'power': 0.0,}} if self.total_phase_map else None
 
-        for key, value in devices.items():
-            if value['ttl'] < now:
+        for key, value in self.devices.items():
+            if value['ttl'] > now:
                 count += 1
                 power += value['power']
                 if phases:
@@ -108,7 +118,7 @@ class Total:
                     if phase:
                         phases[phase]['power'] += value['power']
                     else:
-                        self.__log.logMsg('Microconverter with ID ' + str(key) + ' was not found in forward_phase_map', 2)
+                        self.__log.logMsg('Microconverter with ID ' + str(key) + ' was not found in total_phase_map', 2)
 
         self.__log.logMsg('Total active converters: ' + str(count) + ' power: ' + str(power), 3)
 

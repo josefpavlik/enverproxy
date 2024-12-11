@@ -15,6 +15,13 @@ Requires `paho-mqtt`. You can install it via `pip3 install paho-mqtt`
 
 Restart your EVB202 and immediately press `OK` to enter the boot menu. Under `Set DHCP` set `USE DHCP` to `NO`. Under `Set Client IP` set the IP of your EVB202 to a static IP in your subnet. Under `Set Server IP` configure the IP address of your linux machine running `enverproxy.py`. Under `Set Server Mode` select `Local` as Server - yes the manual say's it's not supported for EVB202, but it works.
 
+### Total power calculation
+
+If activated in the configuration, enverproxy can calculate the total power and the number of online microinverters.
+The format follows the format used in [https://github.com/mr-manuel/venus-os_dbus-mqtt-grid](venus-os_dbus-mqtt-grid), so you can use the data from enverproxy to emulate a power meter in your Venus OS device, e.g. Victron Cerbo GX.
+If you specify the `total_phase_map` in the configuration, the returned data will contain the total power per phase for a 3-phase environment.
+The topic for total power calculation is `enverbridge/total`.
+
 ## Nasty details
 
 The EVB202 will connect to the server every second - even if there is no data to transmit. This will blow up your log file if the log level is set to 3 or higher. Every 20 seconds there is a transmission of some unknown data. If the microinverters are online there will be data approximately once every minute.
