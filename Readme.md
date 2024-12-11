@@ -18,7 +18,7 @@ Restart your EVB202 and immediately press `OK` to enter the boot menu. Under `Se
 ### EVB300
 
 Configure your EVB300 to use WiFi in STA mode or AP+STA mode under `WiFi Setting`. STA Mode WiFi needs to be able to connect your enverproxy host.
-Under `Trans Setting` select `SocketA Connect Setting` to `TCP-Client`. Enter your the host IP or DNS name of your host running enverproxy. Port needs to matcht with your enverprox settings - port 10013 is successfully tested.
+Under `Trans Setting` select `SocketA Connect Setting` to `TCP-Client`. Enter the host IP or DNS name of your host running enverproxy. Port needs to match with your enverprox settings - port 10013 is successfully tested.
 Do not connect an ethernet cable, that will stop the device from sending out data as configured in `Trans Settings`!
 
 ## Nasty details
