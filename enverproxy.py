@@ -51,6 +51,9 @@ class Forward:
 class TheServer:
     input_list = []
     channel = {}
+    send_config_every = 100 # every 100 packets sends also the config
+    packet_count = send_config_every
+
 
     def __init__(self, host, port, forward_to, delay = 0.0001, buffer_size = 4096, log = None):
         if log == None:
@@ -200,9 +203,43 @@ class TheServer:
     def submit_data(self, wrdata):
         # Can be https as well. Also: if you use another port then 80 or 443 do not forget to add the port number.
         # user and password.
+        send_config=self.packet_count >= self.send_config_every
+        self.packet_count += 1
+        if send_config: self.packet_count = 0
         for wrdict in wrdata:
             id = wrdict.pop('wrid')
             wrdict.pop('remaining', None)
+            if send_config:
+                dev_id=f"enverbridge_{id}"
+                device={
+                    "identifiers": [dev_id],
+                    "name": f"EnverTech {id}",
+                    "model": "EVT-800",
+                    "manufacturer": "Envertech",
+                    "serial_number": f"{id}"
+                }
+                devices=[
+                    {"key":"dc", "name":"DC voltage", "unit":"V", "device_class":"voltage", "round":1},
+                    {"key":"power", "name":"power", "unit":"W", "device_class":"power", "round":1},
+                    {"key":"totalkwh", "name":"total energy", "unit":"kWh", "device_class":"energy", "state":"total", "round":3},
+                    {"key":"temp", "name":"temperature", "unit":"°C", "device_class":"temperature", "round":1},
+                    {"key":"ac", "name":"grid voltage", "unit":"V", "device_class":"voltage", "round":1},
+                    {"key":"freq", "name":"grid frequency", "unit":"Hz", "device_class":"frequency", "round":2}
+                ]
+                for dev in devices:
+                    payload={
+                        "name": dev['name'],
+                        "unique_id": f"{dev_id}_{dev['key']}",
+                        "state_topic": f"enverbridge/{id}",
+                        "value_template": f"{{{{ '%.{dev['round']}F' | format(value_json.{dev['key']}) }}}}",
+                        "unit_of_measurement": dev['unit'],
+                        "device_class": dev['device_class'],
+                        "state_class": dev.pop('state', 'measurement'),
+                        "device": device
+                    }
+                    self.__log.logMsg(f"Submitting config for {dev['key']} of converter {id} to MQTT", 3)
+                    self.mqtt.publish(f"homeassistant/sensor/{dev_id}_{dev['key']}/config", json.dumps(payload))
+
             self.__log.logMsg('Submitting data for converter: ' + str(id) + ' to MQTT', 3)
             self.mqtt.publish('enverbridge/' + id, json.dumps(wrdict))
         self.__log.logMsg('Finished sending to MQTT', 2)
@@ -323,3 +360,44 @@ if __name__ == '__main__':
         server.close_all()
         log.logMsg('Stopping server', 1)
         sys.exit(0)
+
+
+# Example of data received from Enverbridge:
+
+'''
+# value example:
+# enverbridge/3055484/state:
+./pub -t enverbridge/3055484/state -m '
+    {
+        "dc": 23.5234375,
+        "power": 0.0,
+        "totalkwh": 12.961181640625,
+        "temp": 13.296875,
+        "ac": 234.421875,
+        "freq": 50.0
+    }'
+'''
+
+
+# config:
+'''
+
+./pub -t homeassistant/sensor/enverbridge_dc/config -m '
+    {
+        "name": "DC",
+        "unique_id": "enverbridge_3055484_dc",
+        "state_topic": "enverbridge/3055484/state",
+        "value_template": "{{ '%.1f' | format(value_json.dc) }}",
+        "unit_of_measurement": "V",
+        "device_class": "voltage",
+        "state_class": "measurement",
+        "device": {
+            "identifiers": ["enverbridge_3055484"],
+            "name": "EnverBridge 3055484",
+            "model": "EVT-800",
+            "manufacturer": "Envertech"
+        }
+    }'
+
+'''       
+
